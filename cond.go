@@ -53,12 +53,12 @@ func (c *commonCond) WaitCount() int {
 	return c.s.WaitCount()
 }
 
-type Cond struct {
+type cond struct {
 	L sync.Locker
 	commonCond
 }
 
-func (c *Cond) Wait() bool {
+func (c *cond) Wait() bool {
 	subsig := c.r.sig.subsig.Load()
 	// We have to do it before Unlock, so Signal will behave as sync.Cond.Signal
 	c.r.sig.waits.Add(1)
@@ -69,7 +69,7 @@ func (c *Cond) Wait() bool {
 	return ok
 }
 
-func (c *Cond) WaitWithCtx(ctx context.Context) (bool, error) {
+func (c *cond) WaitWithCtx(ctx context.Context) (bool, error) {
 	subsig := c.r.sig.subsig.Load()
 	c.r.sig.waits.Add(1)
 	c.L.Unlock()
@@ -79,11 +79,11 @@ func (c *Cond) WaitWithCtx(ctx context.Context) (bool, error) {
 	return ok, err
 }
 
-// NewCond returns Cond with associated locker. The same as sync.Cond, but has more functionality. Only Wait like methods use lock.
+// newCond returns Cond with associated locker. The same as sync.Cond, but has more functionality. Only Wait like methods use lock.
 // Slower than sync.Cond by ~3 times (sync.Cond's tests which only benchmarks broadcast).
-func NewCond(l sync.Locker) *Cond {
+func newCond(l sync.Locker) *cond {
 	s, r := New()
-	return &Cond{
+	return &cond{
 		L: l,
 		commonCond: commonCond{
 			s: s,
@@ -92,12 +92,12 @@ func NewCond(l sync.Locker) *Cond {
 	}
 }
 
-type RWCond struct {
+type rwCond struct {
 	L *sync.RWMutex
 	commonCond
 }
 
-func (c *RWCond) Wait() bool {
+func (c *rwCond) Wait() bool {
 	subsig := c.r.sig.subsig.Load()
 	c.L.RUnlock()
 	ok := c.r.swait(subsig)
@@ -105,7 +105,7 @@ func (c *RWCond) Wait() bool {
 	return ok
 }
 
-func (c *RWCond) WaitWithCtx(ctx context.Context) (bool, error) {
+func (c *rwCond) WaitWithCtx(ctx context.Context) (bool, error) {
 	subsig := c.r.sig.subsig.Load()
 	c.L.RUnlock()
 	ok, err := c.r.swaitWithCtx(ctx, subsig)
@@ -113,10 +113,10 @@ func (c *RWCond) WaitWithCtx(ctx context.Context) (bool, error) {
 	return ok, err
 }
 
-// NewRWCond returns RWCond with associated sync.RWMutex. Uses RUnlock and Rlock for Wait like methods. Other methods do not use lock.
-func NewRWCond(l *sync.RWMutex) *RWCond {
+// newRWCond returns RWCond with associated sync.RWMutex. Uses RUnlock and Rlock for Wait like methods. Other methods do not use lock.
+func newRWCond(l *sync.RWMutex) *rwCond {
 	s, r := New()
-	return &RWCond{
+	return &rwCond{
 		L: l,
 		commonCond: commonCond{
 			s: s,
