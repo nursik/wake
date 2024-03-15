@@ -95,6 +95,7 @@ func (s *Signaller) WaitCount() int {
 
 // Close closes signaller and wakes all waiting goroutines.
 // The first Close() returns true and subsequent calls always return false.
+// All methods are safe for use even if signaller is closed.
 func (s *Signaller) Close() bool {
 	first := !s.sig.closed.Swap(true)
 	if first {
@@ -103,7 +104,8 @@ func (s *Signaller) Close() bool {
 	return first
 }
 
-// IsClosed reports if signaller is closed
+// IsClosed reports if signaller is closed.
+// All methods are safe for use even if signaller is closed.
 func (s *Signaller) IsClosed() bool {
 	return s.sig.closed.Load()
 }
