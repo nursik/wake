@@ -3,6 +3,7 @@ package wake_test
 import (
 	"context"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestSignallerBroadcast(t *testing.T) {
-	const N = 1000
+	const N = 10
 	s, r := New()
 	awake := make(chan bool, N)
 
@@ -33,6 +34,10 @@ func TestSignallerBroadcast(t *testing.T) {
 
 	for i := 0; i < N; i++ {
 		go func() {
+			r.Wait()
+			awake <- true
+			r.Wait()
+			awake <- true
 			r.Wait()
 			awake <- true
 			r.Wait()
@@ -45,7 +50,41 @@ func TestSignallerBroadcast(t *testing.T) {
 	for i := 0; i < N; i++ {
 		<-awake
 	}
+	select {
+	case <-awake:
+		t.Fatal("goroutine not asleep")
+	default:
+	}
+
+	for s.WaitCount() != N {
+	}
 	s.Broadcast()
+	for i := 0; i < N; i++ {
+		<-awake
+	}
+	select {
+	case <-awake:
+		t.Fatal("goroutine not asleep")
+	default:
+	}
+
+	for s.WaitCount() != N {
+	}
+	require.Equal(t, 0, s.Signal(0))
+	for i := 0; i < N; i++ {
+		<-awake
+	}
+	select {
+	case <-awake:
+		t.Fatal("goroutine not asleep")
+	default:
+	}
+
+	for s.WaitCount() != N {
+	}
+	cnt, err := s.SignalWithCtx(context.Background(), 0)
+	require.Equal(t, 0, cnt)
+	require.Nil(t, err)
 	for i := 0; i < N; i++ {
 		<-awake
 	}
@@ -59,9 +98,10 @@ func TestSignallerBroadcast(t *testing.T) {
 func TestSignallerSignal(t *testing.T) {
 	const N = 20
 	const M = 20
+	const S = 10
 
 	s, r := New()
-	awake := make(chan bool, N+M)
+	awake := make(chan bool, max(N+M, N*S))
 	for i := 0; i < N+M; i++ {
 		go func() {
 			r.Wait()
@@ -70,6 +110,8 @@ func TestSignallerSignal(t *testing.T) {
 	}
 	for s.WaitCount() != N+M {
 	}
+	// Usually r.Wait is fast enough to pass this test, but sometimes it is not.
+	time.Sleep(time.Microsecond * 100)
 	select {
 	case <-awake:
 		t.Fatal("goroutine not asleep")
@@ -102,7 +144,6 @@ func TestSignallerSignal(t *testing.T) {
 	default:
 	}
 
-	const S = 10
 	for i := 0; i < N*S; i++ {
 		go func() {
 			r.Wait()
@@ -195,7 +236,8 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		require.Equal(t, context.DeadlineExceeded, err)
 		s.Close()
 
-		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
+		// Sometimes SignalWithCtx is so fast that it bypasses IsClosed and returns ctx.Err() if deadline is Nanosecond
+		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
 		defer cancel2()
 		cnt, err = s.SignalWithCtx(ctx2, 1)
 		require.Equal(t, 0, cnt)
@@ -266,8 +308,13 @@ func TestSignallerClose(t *testing.T) {
 		require.True(t, s.IsClosed())
 		require.True(t, r.IsClosed())
 		require.Equal(t, 0, s.WaitCount())
+		require.Equal(t, 0, s.Signal(0))
 		require.Equal(t, 0, s.Signal(1))
 		cnt, err := s.SignalWithCtx(context.Background(), N)
+		require.Equal(t, 0, cnt)
+		require.Nil(t, err)
+
+		cnt, err = s.SignalWithCtx(context.Background(), 0)
 		require.Equal(t, 0, cnt)
 		require.Nil(t, err)
 	})
@@ -376,6 +423,45 @@ func TestReceiverWait(t *testing.T) {
 	require.False(t, r.Wait())
 }
 
+// Must be a copy of TestReceiverWait
+func TestUnsafeWait(t *testing.T) {
+	s, r := New()
+	awake := make(chan bool, 1)
+	var locker sync.Mutex
+
+	go func() {
+		locker.Lock()
+		awake <- UnsafeWait(r, &locker)
+		locker.Unlock()
+	}()
+
+	go func() {
+		locker.Lock()
+		awake <- UnsafeWait(r, &locker)
+		locker.Unlock()
+	}()
+
+	select {
+	case <-awake:
+		t.Fatal("goroutine not asleep")
+	default:
+	}
+	// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
+	for s.WaitCount() != 2 {
+
+	}
+	s.SignalWithCtx(context.Background(), 1)
+	require.True(t, <-awake)
+
+	s.Broadcast()
+	require.True(t, <-awake)
+
+	s.Close()
+	locker.Lock()
+	require.False(t, UnsafeWait(r, &locker))
+	locker.Unlock()
+}
+
 func TestReceiverWaitWithCtx(t *testing.T) {
 	t.Run("Background", func(t *testing.T) {
 		s, r := New()
@@ -400,6 +486,28 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		ok, err := r.WaitWithCtx(context.Background())
 		require.False(t, ok)
 		require.Nil(t, err)
+	})
+	t.Run("BackgroundBroadcast", func(t *testing.T) {
+		s, r := New()
+		awake := make(chan bool, 1)
+
+		go func() {
+			ok, err := r.WaitWithCtx(context.Background())
+			require.Nil(t, err)
+			awake <- ok
+			s.Close()
+		}()
+
+		select {
+		case <-awake:
+			t.Fatal("goroutine not asleep")
+		default:
+		}
+
+		for !s.IsClosed() {
+			s.Broadcast()
+		}
+		<-awake
 	})
 	t.Run("Deadline", func(t *testing.T) {
 		s, r := New()
@@ -441,6 +549,7 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		s.Close()
 
 		ctx2, cancel2 := context.WithCancel(context.Background())
+		defer cancel2()
 
 		go func() {
 			ok, err := r.WaitWithCtx(ctx2)
@@ -449,7 +558,127 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 			done <- struct{}{}
 		}()
 
-		cancel2()
+		<-done
+	})
+}
+
+// Must be a copy of ReceiverWaitWithCtx
+func TestUnsafeWaitCtx(t *testing.T) {
+	t.Run("Background", func(t *testing.T) {
+		s, r := New()
+		awake := make(chan bool, 1)
+		var locker sync.Mutex
+
+		go func() {
+			locker.Lock()
+			ok, err := UnsafeWaitCtx(r, &locker, context.Background())
+			locker.Unlock()
+			require.Nil(t, err)
+			awake <- ok
+		}()
+
+		select {
+		case <-awake:
+			t.Fatal("goroutine not asleep")
+		default:
+		}
+		// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
+		s.SignalWithCtx(context.Background(), 1)
+		require.True(t, <-awake)
+
+		s.Close()
+		locker.Lock()
+		ok, err := UnsafeWaitCtx(r, &locker, context.Background())
+		locker.Unlock()
+		require.False(t, ok)
+		require.Nil(t, err)
+	})
+	t.Run("BackgroundBroadcast", func(t *testing.T) {
+		s, r := New()
+		awake := make(chan bool, 1)
+		var locker sync.Mutex
+
+		go func() {
+			locker.Lock()
+			ok, err := UnsafeWaitCtx(r, &locker, context.Background())
+			locker.Unlock()
+			require.Nil(t, err)
+			awake <- ok
+			s.Close()
+		}()
+
+		select {
+		case <-awake:
+			t.Fatal("goroutine not asleep")
+		default:
+		}
+
+		for !s.IsClosed() {
+			s.Broadcast()
+		}
+		<-awake
+	})
+	t.Run("Deadline", func(t *testing.T) {
+		s, r := New()
+		var locker sync.Mutex
+
+		ctx1, cancel1 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
+		defer cancel1()
+		locker.Lock()
+		ok, err := UnsafeWaitCtx(r, &locker, ctx1)
+		locker.Unlock()
+		require.True(t, ok)
+		require.Equal(t, context.DeadlineExceeded, err)
+
+		s.Close()
+
+		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
+		defer cancel2()
+
+		locker.Lock()
+		ok, err = UnsafeWaitCtx(r, &locker, ctx2)
+		locker.Unlock()
+		require.False(t, ok)
+		require.Nil(t, err)
+	})
+
+	t.Run("Cancel", func(t *testing.T) {
+		s, r := New()
+		done := make(chan struct{}, 2)
+		var locker sync.Mutex
+
+		ctx1, cancel1 := context.WithCancel(context.Background())
+
+		go func() {
+			locker.Lock()
+			ok, err := UnsafeWaitCtx(r, &locker, ctx1)
+			locker.Unlock()
+			require.True(t, ok)
+			require.Equal(t, context.Canceled, err)
+			done <- struct{}{}
+		}()
+		select {
+		case <-done:
+			t.Fatal("goroutine not asleep")
+		default:
+		}
+
+		cancel1()
+		<-done
+
+		s.Close()
+
+		ctx2, cancel2 := context.WithCancel(context.Background())
+		defer cancel2()
+		go func() {
+			locker.Lock()
+			ok, err := UnsafeWaitCtx(r, &locker, ctx2)
+			locker.Unlock()
+			require.False(t, ok)
+			require.Nil(t, err)
+			done <- struct{}{}
+		}()
+
 		<-done
 	})
 }

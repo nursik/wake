@@ -2,6 +2,7 @@ package wake
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 )
 
@@ -131,20 +132,6 @@ func (r *Receiver) Wait() bool {
 	}
 }
 
-func (r *Receiver) swait(subsig *subsignal) bool {
-	if r.IsClosed() {
-		return false
-	}
-	select {
-	case <-subsig.ch:
-		return true
-	case <-r.sig.closeCh:
-		return false
-	case <-r.sig.direct:
-		return true
-	}
-}
-
 // WaitWithCtx blocks until awaken by signaller, context was cancelled or signaller was closed.
 // Returns false and nil error only if signaller was closed.
 // Returns true and error, where error is nil or ctx.Err().
@@ -156,23 +143,6 @@ func (r *Receiver) WaitWithCtx(ctx context.Context) (bool, error) {
 	defer r.sig.waits.Add(-1)
 
 	subsig := r.sig.subsig.Load()
-	select {
-	case <-r.sig.closeCh:
-		return false, nil
-	case <-subsig.ch:
-		return true, nil
-	case <-ctx.Done():
-		return true, ctx.Err()
-	case <-r.sig.direct:
-		return true, nil
-	}
-}
-
-func (r *Receiver) swaitWithCtx(ctx context.Context, subsig *subsignal) (bool, error) {
-	if r.IsClosed() {
-		return false, nil
-	}
-
 	select {
 	case <-r.sig.closeCh:
 		return false, nil
@@ -200,4 +170,52 @@ func New() (*Signaller, *Receiver) {
 	s.sig = sig
 	r.sig = sig
 	return s, r
+}
+
+// UnsafeWait is used by cond package. You should not use this function.
+func UnsafeWait(r *Receiver, locker sync.Locker) bool {
+	if r.IsClosed() {
+		return false
+	}
+	subsig := r.sig.subsig.Load()
+	// We have to do it before Unlock, so Signal will behave as sync.Cond.Signal
+	r.sig.waits.Add(1)
+	locker.Unlock()
+	var ret bool
+	select {
+	case <-subsig.ch:
+		ret = true
+	case <-r.sig.direct:
+		ret = true
+	case <-r.sig.closeCh:
+	}
+	r.sig.waits.Add(-1)
+	locker.Lock()
+	return ret
+}
+
+// UnsafeWaitCtx is used by cond package. You should not use this function.
+func UnsafeWaitCtx(r *Receiver, locker sync.Locker, ctx context.Context) (bool, error) {
+	if r.IsClosed() {
+		return false, nil
+	}
+	subsig := r.sig.subsig.Load()
+	// We have to do it before Unlock, so Signal will behave as sync.Cond.Signal
+	r.sig.waits.Add(1)
+	locker.Unlock()
+	var ret bool
+	var err error
+	select {
+	case <-subsig.ch:
+		ret = true
+	case <-ctx.Done():
+		ret = true
+		err = ctx.Err()
+	case <-r.sig.direct:
+		ret = true
+	case <-r.sig.closeCh:
+	}
+	r.sig.waits.Add(-1)
+	locker.Lock()
+	return ret, err
 }

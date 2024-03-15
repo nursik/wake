@@ -10,8 +10,8 @@ No mutexes, no internal lists for waiters. Fast and simple API (subject to chang
     - Check how many goroutines are currently waiting (WaitCount)
 - `Receiver`:
     - Wait with/without context (Wait/WaitWithCtx)
-- `Cond`: same as sync.Cond, but with better API
-- `RWCond`: same as Cond, but uses RLock/RUnlock instead of Lock/Unlock
+- `cond/Cond`: same as sync.Cond, but with better API
+- `cond/RWCond`: same as Cond, but uses RLock/RUnlock instead of Lock/Unlock
 
 ## Usage
 ```
