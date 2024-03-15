@@ -19,3 +19,5 @@
 
 # Go workspace file
 go.work
+*.txt
+sync_cond_test.go
