@@ -146,7 +146,7 @@ func (r *Receiver) swait(subsig *subsignal) bool {
 }
 
 // WaitWithCtx blocks until awaken by signaller, context was cancelled or signaller was closed.
-// Returns false and nil error only if it signaller was closed.
+// Returns false and nil error only if signaller was closed.
 // Returns true and error, where error is nil or ctx.Err().
 func (r *Receiver) WaitWithCtx(ctx context.Context) (bool, error) {
 	if r.IsClosed() {
