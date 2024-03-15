@@ -1,5 +1,5 @@
 # Wake - wake goroutines and broadcast
-
+[![Go Reference](https://pkg.go.dev/badge/github.com/nursik/wake.svg)](https://pkg.go.dev/github.com/nursik/wake)
 ## Features
 No mutexes, no internal lists for waiters. Fast and simple API (subject to change till v1.0.0)
 
