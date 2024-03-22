@@ -2,7 +2,9 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/nursik/cond/wake.svg)](https://pkg.go.dev/github.com/nursik/wake/cond)
 
 ## Quickstart
-Wake/cond package provides Cond and RWCond with better API such as signalling and waiting with contexts and close method. Slower than sync.Cond ~3 times (used sync/cond_test.go, which benchmarks only broadcast).
+Wake/cond package provides Cond and RWCond with better [API](https://pkg.go.dev/github.com/nursik/wake/cond) such as signalling and waiting with contexts and close method. Standard sync.Cond is prone to hanging goroutines and this library addresses these issues. Built on top of [wake library](https://pkg.go.dev/github.com/nursik/wake), it provides the same API layout. 
+
+Slower than sync.Cond ~3x (used sync/cond_test.go, which benchmarks only broadcast).
 
 ## Features
 - Signal and get how many goroutines were awoken
@@ -10,12 +12,12 @@ Wake/cond package provides Cond and RWCond with better API such as signalling an
 - Broadcast
 - Wait till Cond/RWCond is closed or Broadcast/Signal is called
 - Wait with context - wake after Broadcast/Signal is called, Cond/RWCond is closed or context is cancelled
-- Check hpw many goroutines are waiting
+- Check how many goroutines are waiting
 - Use RLock/RUnlock with RWCond
 - Close Cond/RWCond so no waiting goroutines will hang up
 ## Usage
 ```
-go get github.com/nursik/wake
+go get github.com/nursik/wake/cond
 ```
 
 ```go
@@ -38,7 +40,7 @@ func Wait(c *cond.Cond, mp map[int]int, key int) {
 		}
 		// Cond.Wait returns false only if Cond was closed.
 		if !c.Wait() {
-			fmt.Printf("Not foundd key %v\n", key)
+			fmt.Printf("Not found key %v\n", key)
 			break
 		}
 	}

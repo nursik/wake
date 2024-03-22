@@ -2,7 +2,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/nursik/wake.svg)](https://pkg.go.dev/github.com/nursik/wake)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nursik/wake)](https://goreportcard.com/report/github.com/nursik/wake)
 ## Features
-Thread-safe, no mutexes, no internal lists for waiters. Fast and simple API (subject to change till v1.0.0)
+Thread-safe, small memory footprint (no internal lists for waiters), no mutexes. Fast and simple [API](https://pkg.go.dev/github.com/nursik/wake) (subject to change till v1.0.0)
 
 - `Signaller`:
     - Wake N goroutines (Signal)
@@ -11,8 +11,9 @@ Thread-safe, no mutexes, no internal lists for waiters. Fast and simple API (sub
     - Check how many goroutines are currently waiting (WaitCount)
 - `Receiver`:
     - Wait with/without context (Wait/WaitWithCtx)
-- `cond/Cond`: same as sync.Cond, but with better API
-- `cond/RWCond`: same as Cond, but uses RLock/RUnlock instead of Lock/Unlock
+- `cond` submodule 
+	- `cond/Cond`: same as sync.Cond, but with better [API](https://pkg.go.dev/github.com/nursik/wake/cond)
+	- `cond/RWCond`: same as Cond, but uses RLock/RUnlock instead of Lock/Unlock
 
 ## Usage
 ```
@@ -30,7 +31,7 @@ import (
 )
 
 func Wait(r *wake.Receiver, id int) {
-	// r.Wait() blocks until it awoken. Returns true if it was awoken or false if it signaller was closed
+	// r.Wait() blocks until it awoken. Returns true if it was awoken or false if signaller was closed
 	for r.Wait() {
 		fmt.Printf("%v: received signal or broadcast\n", id)
 	}
