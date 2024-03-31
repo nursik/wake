@@ -121,7 +121,7 @@ func BenchmarkSignalWithCtx1(b *testing.B) {
 
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		s.SignalWithCtx(ctx, 1)
+		s.SignalWithContext(ctx, 1)
 	}
 }
 
@@ -147,7 +147,7 @@ func BenchmarkSignalWithCtx1Parallel(b *testing.B) {
 				go func() {
 					<-start
 					for i := 0; i < b.N; i++ {
-						s.SignalWithCtx(ctx, 1)
+						s.SignalWithContext(ctx, 1)
 					}
 					wg.Done()
 				}()
@@ -163,7 +163,7 @@ func BenchmarkWait(b *testing.B) {
 	go func() {
 		ctx := context.Background()
 		for !s.IsClosed() {
-			s.SignalWithCtx(ctx, 1)
+			s.SignalWithContext(ctx, 1)
 		}
 	}()
 	for i := 0; i < b.N; i++ {

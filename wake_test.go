@@ -92,7 +92,7 @@ func TestSignallerBroadcast(t *testing.T) {
 
 	for s.WaitCount() != N {
 	}
-	cnt, err := s.SignalWithCtx(context.Background(), 0)
+	cnt, err := s.SignalWithContext(context.Background(), 0)
 	equal(t, 0, cnt)
 	isNilError(t, err)
 	for i := 0; i < N; i++ {
@@ -205,17 +205,17 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 			t.Fatal("goroutine not asleep")
 		default:
 		}
-		cnt, err := s.SignalWithCtx(context.Background(), 1)
+		cnt, err := s.SignalWithContext(context.Background(), 1)
 		equal(t, 1, cnt)
 		isNilError(t, err)
 		<-awake
 
-		cnt, err = s.SignalWithCtx(context.Background(), -1)
+		cnt, err = s.SignalWithContext(context.Background(), -1)
 		equal(t, 0, cnt)
 		isNilError(t, err)
 
 		s.Close()
-		cnt, err = s.SignalWithCtx(context.Background(), 1)
+		cnt, err = s.SignalWithContext(context.Background(), 1)
 		equal(t, 0, cnt)
 		isNilError(t, err)
 	})
@@ -234,14 +234,14 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 			t.Fatal("goroutine not asleep")
 		default:
 		}
-		cnt, err := s.SignalWithCtx(context.Background(), 1)
+		cnt, err := s.SignalWithContext(context.Background(), 1)
 		equal(t, 1, cnt)
 		isNilError(t, err)
 		<-awake
 
 		ctx1, cancel1 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel1()
-		cnt, err = s.SignalWithCtx(ctx1, 1)
+		cnt, err = s.SignalWithContext(ctx1, 1)
 		equal(t, 0, cnt)
 		equal(t, context.DeadlineExceeded, err)
 		s.Close()
@@ -249,7 +249,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		// Sometimes SignalWithCtx is so fast that it bypasses IsClosed and returns ctx.Err() if deadline is Nanosecond
 		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
 		defer cancel2()
-		cnt, err = s.SignalWithCtx(ctx2, 1)
+		cnt, err = s.SignalWithContext(ctx2, 1)
 		equal(t, 0, cnt)
 		isNilError(t, err)
 	})
@@ -260,7 +260,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		ctx1, cancel1 := context.WithCancel(context.Background())
 
 		go func() {
-			cnt, err := s.SignalWithCtx(ctx1, 1)
+			cnt, err := s.SignalWithContext(ctx1, 1)
 			equal(t, context.Canceled, err)
 			equal(t, 0, cnt)
 			done <- struct{}{}
@@ -278,7 +278,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		defer cancel2()
 
 		go func() {
-			cnt, err := s.SignalWithCtx(ctx2, 1)
+			cnt, err := s.SignalWithContext(ctx2, 1)
 			isNilError(t, err)
 			equal(t, 1, cnt)
 			done <- struct{}{}
@@ -292,7 +292,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 
 		go func() {
 			done <- struct{}{}
-			cnt, err := s.SignalWithCtx(ctx3, 1)
+			cnt, err := s.SignalWithContext(ctx3, 1)
 			isNilError(t, err)
 			equal(t, 0, cnt)
 			done <- struct{}{}
@@ -301,7 +301,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		s.Close()
 		<-done
 
-		cnt, err := s.SignalWithCtx(ctx2, 1)
+		cnt, err := s.SignalWithContext(ctx2, 1)
 		equal(t, 0, cnt)
 		isNilError(t, err)
 	})
@@ -320,11 +320,11 @@ func TestSignallerClose(t *testing.T) {
 		equal(t, 0, s.WaitCount())
 		equal(t, 0, s.Signal(0))
 		equal(t, 0, s.Signal(1))
-		cnt, err := s.SignalWithCtx(context.Background(), N)
+		cnt, err := s.SignalWithContext(context.Background(), N)
 		equal(t, 0, cnt)
 		isNilError(t, err)
 
-		cnt, err = s.SignalWithCtx(context.Background(), 0)
+		cnt, err = s.SignalWithContext(context.Background(), 0)
 		equal(t, 0, cnt)
 		isNilError(t, err)
 	})
@@ -340,7 +340,7 @@ func TestSignallerClose(t *testing.T) {
 					ok := r.Wait()
 					equal(t, false, ok)
 				} else {
-					ok, err := r.WaitWithCtx(context.Background())
+					ok, err := r.WaitWithContext(context.Background())
 					equal(t, false, ok)
 					isNilError(t, err)
 				}
@@ -372,7 +372,7 @@ func TestSignallerClose(t *testing.T) {
 		s, _ := New()
 		done := make(chan bool)
 		go func() {
-			cnt, err := s.SignalWithCtx(context.Background(), N)
+			cnt, err := s.SignalWithContext(context.Background(), N)
 			equal(t, 0, cnt)
 			isNilError(t, err)
 			done <- false
@@ -426,7 +426,7 @@ func TestReceiverWait(t *testing.T) {
 	default:
 	}
 	// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
-	s.SignalWithCtx(context.Background(), 1)
+	s.SignalWithContext(context.Background(), 1)
 	equal(t, true, <-awake)
 
 	s.Close()
@@ -460,7 +460,7 @@ func TestUnsafeWait(t *testing.T) {
 	for s.WaitCount() != 2 {
 
 	}
-	s.SignalWithCtx(context.Background(), 1)
+	s.SignalWithContext(context.Background(), 1)
 	equal(t, true, <-awake)
 
 	s.Broadcast()
@@ -478,7 +478,7 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		awake := make(chan bool, 1)
 
 		go func() {
-			ok, err := r.WaitWithCtx(context.Background())
+			ok, err := r.WaitWithContext(context.Background())
 			isNilError(t, err)
 			awake <- ok
 		}()
@@ -489,11 +489,11 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		default:
 		}
 		// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
-		s.SignalWithCtx(context.Background(), 1)
+		s.SignalWithContext(context.Background(), 1)
 		equal(t, true, <-awake)
 
 		s.Close()
-		ok, err := r.WaitWithCtx(context.Background())
+		ok, err := r.WaitWithContext(context.Background())
 		equal(t, false, ok)
 		isNilError(t, err)
 	})
@@ -502,7 +502,7 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		awake := make(chan bool, 1)
 
 		go func() {
-			ok, err := r.WaitWithCtx(context.Background())
+			ok, err := r.WaitWithContext(context.Background())
 			isNilError(t, err)
 			awake <- ok
 			s.Close()
@@ -523,15 +523,15 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		s, r := New()
 		ctx1, cancel1 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel1()
-		ok, err := r.WaitWithCtx(ctx1)
-		equal(t, true, ok)
+		ok, err := r.WaitWithContext(ctx1)
+		equal(t, false, ok)
 		equal(t, context.DeadlineExceeded, err)
 
 		s.Close()
 		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel2()
 
-		ok, err = r.WaitWithCtx(ctx2)
+		ok, err = r.WaitWithContext(ctx2)
 		equal(t, false, ok)
 		isNilError(t, err)
 	})
@@ -542,8 +542,8 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		ctx1, cancel1 := context.WithCancel(context.Background())
 
 		go func() {
-			ok, err := r.WaitWithCtx(ctx1)
-			equal(t, true, ok)
+			ok, err := r.WaitWithContext(ctx1)
+			equal(t, false, ok)
 			equal(t, context.Canceled, err)
 			done <- struct{}{}
 		}()
@@ -562,7 +562,7 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		defer cancel2()
 
 		go func() {
-			ok, err := r.WaitWithCtx(ctx2)
+			ok, err := r.WaitWithContext(ctx2)
 			equal(t, false, ok)
 			isNilError(t, err)
 			done <- struct{}{}
@@ -581,7 +581,7 @@ func TestUnsafeWaitCtx(t *testing.T) {
 
 		go func() {
 			locker.Lock()
-			ok, err := UnsafeWaitCtx(r, &locker, context.Background())
+			ok, err := UnsafeWaitContext(r, &locker, context.Background())
 			locker.Unlock()
 			isNilError(t, err)
 			awake <- ok
@@ -593,12 +593,12 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		default:
 		}
 		// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
-		s.SignalWithCtx(context.Background(), 1)
+		s.SignalWithContext(context.Background(), 1)
 		equal(t, true, <-awake)
 
 		s.Close()
 		locker.Lock()
-		ok, err := UnsafeWaitCtx(r, &locker, context.Background())
+		ok, err := UnsafeWaitContext(r, &locker, context.Background())
 		locker.Unlock()
 		equal(t, false, ok)
 		isNilError(t, err)
@@ -610,7 +610,7 @@ func TestUnsafeWaitCtx(t *testing.T) {
 
 		go func() {
 			locker.Lock()
-			ok, err := UnsafeWaitCtx(r, &locker, context.Background())
+			ok, err := UnsafeWaitContext(r, &locker, context.Background())
 			locker.Unlock()
 			isNilError(t, err)
 			awake <- ok
@@ -635,9 +635,9 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		ctx1, cancel1 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel1()
 		locker.Lock()
-		ok, err := UnsafeWaitCtx(r, &locker, ctx1)
+		ok, err := UnsafeWaitContext(r, &locker, ctx1)
 		locker.Unlock()
-		equal(t, true, ok)
+		equal(t, false, ok)
 		equal(t, context.DeadlineExceeded, err)
 
 		s.Close()
@@ -646,7 +646,7 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		defer cancel2()
 
 		locker.Lock()
-		ok, err = UnsafeWaitCtx(r, &locker, ctx2)
+		ok, err = UnsafeWaitContext(r, &locker, ctx2)
 		locker.Unlock()
 		equal(t, false, ok)
 		isNilError(t, err)
@@ -661,9 +661,9 @@ func TestUnsafeWaitCtx(t *testing.T) {
 
 		go func() {
 			locker.Lock()
-			ok, err := UnsafeWaitCtx(r, &locker, ctx1)
+			ok, err := UnsafeWaitContext(r, &locker, ctx1)
 			locker.Unlock()
-			equal(t, true, ok)
+			equal(t, false, ok)
 			equal(t, context.Canceled, err)
 			done <- struct{}{}
 		}()
@@ -682,7 +682,7 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		defer cancel2()
 		go func() {
 			locker.Lock()
-			ok, err := UnsafeWaitCtx(r, &locker, ctx2)
+			ok, err := UnsafeWaitContext(r, &locker, ctx2)
 			locker.Unlock()
 			equal(t, false, ok)
 			isNilError(t, err)
@@ -723,7 +723,7 @@ func TestSignallerSignalConcurrent(t *testing.T) {
 			done <- cur
 		}()
 	}
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second)
 	s.Close()
 	var total int
 
@@ -760,13 +760,13 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 				var cur int
 				for !s.IsClosed() {
 					n := rand.Intn(R) + 1
-					cnt, _ := s.SignalWithCtx(ctx, n)
+					cnt, _ := s.SignalWithContext(ctx, n)
 					cur -= cnt
 				}
 				done <- cur
 			}()
 		}
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Second)
 		s.Close()
 		var total int
 
@@ -798,7 +798,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 				var cur int
 				for {
 					n := rand.Intn(R) + 1
-					cnt, err := s.SignalWithCtx(ctx, n)
+					cnt, err := s.SignalWithContext(ctx, n)
 					cur -= cnt
 					if err != nil || s.IsClosed() {
 						break
@@ -807,7 +807,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 				done <- cur
 			}()
 		}
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Second)
 		cancel()
 		var total int
 
@@ -825,7 +825,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 		s, r := New()
 		defer s.Close()
 		done := make(chan int, R+S)
-		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Second))
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second))
 		defer cancel()
 
 		for i := 0; i < R; i++ {
@@ -843,7 +843,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 				var cur int
 				for {
 					n := rand.Intn(R) + 1
-					cnt, err := s.SignalWithCtx(ctx, n)
+					cnt, err := s.SignalWithContext(ctx, n)
 					cur -= cnt
 					if err != nil || s.IsClosed() {
 						break
@@ -878,7 +878,7 @@ func TestSignallerBroadcastAndSignalWithCtx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	for i := 0; i < N; i++ {
 		go func() {
-			n, err := s.SignalWithCtx(ctx, 1)
+			n, err := s.SignalWithContext(ctx, 1)
 			equal(t, 0, n)
 			equal(t, context.Canceled, err)
 			done <- true

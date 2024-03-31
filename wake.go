@@ -24,12 +24,13 @@ type signal struct {
 	waits   atomic.Int64
 }
 
+// Signaller struct contains methods to wake goroutines waiting on the corresponding Receiver (created by [New]). All methods are thread safe.
 type Signaller struct {
 	sig *signal
 }
 
-// Signal wakes n goroutines (if there are any) and returns how many goroutines were awoken.
-// If n <= 0 it wakes all goroutines and returns 0 (the same as Broadcast()).
+// Signal wakes n goroutines (if there are any) and reports how many goroutines were awoken.
+// If n <= 0 it wakes all goroutines and reported value is 0 (same as Broadcast()).
 func (s *Signaller) Signal(n int) int {
 	if n <= 0 {
 		s.Broadcast()
@@ -54,11 +55,11 @@ forloop:
 	return count
 }
 
-// SignalWithCtx wakes n goroutines and reports how many goroutines were awoken and ctx.Err() if context was cancelled.
+// SignalWithContext wakes n goroutines and reports how many goroutines were awoken (by this call) and ctx.Err() if context was cancelled.
 // It is a blocking operation and will be finished when all n goroutines are awoken, context is cancelled or signaller was closed.
-// If n <= 0 it wakes all goroutines (the same as Broadcast()) regardless of context cancellation.
+// If n <= 0 it wakes all goroutines (same as Broadcast()) regardless of context cancellation.
 // Error is always nil for closed signaller or if n <= 0.
-func (s *Signaller) SignalWithCtx(ctx context.Context, n int) (int, error) {
+func (s *Signaller) SignalWithContext(ctx context.Context, n int) (int, error) {
 	if n <= 0 {
 		s.Broadcast()
 		return 0, nil
@@ -88,14 +89,13 @@ func (s *Signaller) Broadcast() {
 	close(subsig.ch)
 }
 
-// WaitCount returns current number of goroutines waiting for signal.
+// WaitCount reports current number of goroutines waiting for signal.
 func (s *Signaller) WaitCount() int {
 	return int(s.sig.waits.Load())
 }
 
 // Close closes signaller and wakes all waiting goroutines.
 // The first Close() returns true and subsequent calls always return false.
-// All methods are safe for use even if signaller is closed.
 func (s *Signaller) Close() bool {
 	first := !s.sig.closed.Swap(true)
 	if first {
@@ -105,11 +105,11 @@ func (s *Signaller) Close() bool {
 }
 
 // IsClosed reports if signaller is closed.
-// All methods are safe for use even if signaller is closed.
 func (s *Signaller) IsClosed() bool {
 	return s.sig.closed.Load()
 }
 
+// Receiver struct contains methods to wait for signals sent by corresponding Signaller (created by [New]). All methods are thread safe.
 type Receiver struct {
 	sig *signal
 }
@@ -134,10 +134,11 @@ func (r *Receiver) Wait() bool {
 	}
 }
 
-// WaitWithCtx blocks until awaken by signaller, context was cancelled or signaller was closed.
-// Returns false and nil error only if signaller was closed.
-// Returns true and error, where error is nil or ctx.Err().
-func (r *Receiver) WaitWithCtx(ctx context.Context) (bool, error) {
+// WaitWithContext blocks until awaken by signaller, context was cancelled or signaller was closed.
+// Returns true and nil, if awaken by signaller.
+// Returns false and nil, if signaller was closed.
+// Returns false and ctx.Err(), if context was cancelled.
+func (r *Receiver) WaitWithContext(ctx context.Context) (bool, error) {
 	if r.IsClosed() {
 		return false, nil
 	}
@@ -151,7 +152,7 @@ func (r *Receiver) WaitWithCtx(ctx context.Context) (bool, error) {
 	case <-subsig.ch:
 		return true, nil
 	case <-ctx.Done():
-		return true, ctx.Err()
+		return false, ctx.Err()
 	case <-r.sig.direct:
 		return true, nil
 	}
@@ -162,7 +163,7 @@ func (r *Receiver) IsClosed() bool {
 	return r.sig.closed.Load()
 }
 
-// New returns signaller and receiver.
+// New creates Signaller and Receiver.
 func New() (*Signaller, *Receiver) {
 	sig := new(signal)
 	sig.closeCh = make(chan struct{})
@@ -174,7 +175,7 @@ func New() (*Signaller, *Receiver) {
 	return s, r
 }
 
-// UnsafeWait is used by cond package. You should not use this function.
+// UnsafeWait is utilized by cond package. Direct usage is not recommended.
 func UnsafeWait(r *Receiver, locker sync.Locker) bool {
 	if r.IsClosed() {
 		return false
@@ -196,8 +197,8 @@ func UnsafeWait(r *Receiver, locker sync.Locker) bool {
 	return ret
 }
 
-// UnsafeWaitCtx is used by cond package. You should not use this function.
-func UnsafeWaitCtx(r *Receiver, locker sync.Locker, ctx context.Context) (bool, error) {
+// UnsafeWaitContext is utilized by cond package. Direct usage is not recommended.
+func UnsafeWaitContext(r *Receiver, locker sync.Locker, ctx context.Context) (bool, error) {
 	if r.IsClosed() {
 		return false, nil
 	}
@@ -211,7 +212,6 @@ func UnsafeWaitCtx(r *Receiver, locker sync.Locker, ctx context.Context) (bool, 
 	case <-subsig.ch:
 		ret = true
 	case <-ctx.Done():
-		ret = true
 		err = ctx.Err()
 	case <-r.sig.direct:
 		ret = true
