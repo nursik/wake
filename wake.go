@@ -41,8 +41,8 @@ func (s *Signaller) Signal(n int) int {
 	var count int
 forloop:
 	for n > 0 {
-		// Notice: it is possible that signaller was closed and we potentially can wake up someone.
-		// However having two cases in select makes it slower.
+		// Note: It's possible for the signaller to be closed, potentially waking up goroutines.
+		// However, having two cases in the select statement might slow down execution.
 		select {
 		case s.sig.direct <- struct{}{}:
 			count++

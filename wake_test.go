@@ -8,21 +8,31 @@ import (
 	"time"
 
 	. "github.com/nursik/wake"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
+func equal[T comparable](t *testing.T, expected T, got T) {
+	if expected != got {
+		t.Fatalf("expected %v, got %v", expected, got)
+	}
+}
+
+func isNilError(t *testing.T, got error) {
+	if got != nil {
+		t.Fatalf("expected nil error, got %v", got)
+	}
 }
 
 func TestNew(t *testing.T) {
 	s, r := New()
-	require.False(t, s.IsClosed())
-	require.False(t, r.IsClosed())
-	require.NotNil(t, s)
-	require.NotNil(t, r)
-	require.Equal(t, 0, s.WaitCount())
+	equal(t, false, s.IsClosed())
+	equal(t, false, r.IsClosed())
+	if s == nil {
+		t.Fatalf("expected not nil, got %v", s)
+	}
+	if r == nil {
+		t.Fatalf("expected not nil, got %v", r)
+	}
+	equal(t, 0, s.WaitCount())
 }
 
 func TestSignallerBroadcast(t *testing.T) {
@@ -70,7 +80,7 @@ func TestSignallerBroadcast(t *testing.T) {
 
 	for s.WaitCount() != N {
 	}
-	require.Equal(t, 0, s.Signal(0))
+	equal(t, 0, s.Signal(0))
 	for i := 0; i < N; i++ {
 		<-awake
 	}
@@ -83,8 +93,8 @@ func TestSignallerBroadcast(t *testing.T) {
 	for s.WaitCount() != N {
 	}
 	cnt, err := s.SignalWithCtx(context.Background(), 0)
-	require.Equal(t, 0, cnt)
-	require.Nil(t, err)
+	equal(t, 0, cnt)
+	isNilError(t, err)
 	for i := 0; i < N; i++ {
 		<-awake
 	}
@@ -118,7 +128,7 @@ func TestSignallerSignal(t *testing.T) {
 	default:
 	}
 
-	require.Equal(t, N, s.Signal(N))
+	equal(t, N, s.Signal(N))
 
 	for i := 0; i < N; i++ {
 		<-awake
@@ -130,13 +140,13 @@ func TestSignallerSignal(t *testing.T) {
 	default:
 	}
 
-	require.Equal(t, M, s.Signal(M+1))
+	equal(t, M, s.Signal(M+1))
 
 	for i := 0; i < M; i++ {
 		<-awake
 	}
 
-	require.Equal(t, 0, s.Signal(1))
+	equal(t, 0, s.Signal(1))
 
 	select {
 	case <-awake:
@@ -159,7 +169,7 @@ func TestSignallerSignal(t *testing.T) {
 	for i := 0; i < S; i++ {
 		go func() {
 			<-start
-			require.Equal(t, N, s.Signal(N))
+			equal(t, N, s.Signal(N))
 		}()
 	}
 	select {
@@ -186,7 +196,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 
 		go func() {
 			ok := r.Wait()
-			require.True(t, ok)
+			equal(t, true, ok)
 			awake <- ok
 		}()
 
@@ -196,18 +206,18 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		default:
 		}
 		cnt, err := s.SignalWithCtx(context.Background(), 1)
-		require.Equal(t, 1, cnt)
-		require.Equal(t, nil, err)
+		equal(t, 1, cnt)
+		isNilError(t, err)
 		<-awake
 
 		cnt, err = s.SignalWithCtx(context.Background(), -1)
-		require.Equal(t, 0, cnt)
-		require.Equal(t, nil, err)
+		equal(t, 0, cnt)
+		isNilError(t, err)
 
 		s.Close()
 		cnt, err = s.SignalWithCtx(context.Background(), 1)
-		require.Equal(t, 0, cnt)
-		require.Equal(t, nil, err)
+		equal(t, 0, cnt)
+		isNilError(t, err)
 	})
 	t.Run("Deadline", func(t *testing.T) {
 		s, r := New()
@@ -215,7 +225,7 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 
 		go func() {
 			ok := r.Wait()
-			require.True(t, ok)
+			equal(t, true, ok)
 			awake <- ok
 		}()
 
@@ -225,23 +235,23 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		default:
 		}
 		cnt, err := s.SignalWithCtx(context.Background(), 1)
-		require.Equal(t, 1, cnt)
-		require.Equal(t, nil, err)
+		equal(t, 1, cnt)
+		isNilError(t, err)
 		<-awake
 
 		ctx1, cancel1 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel1()
 		cnt, err = s.SignalWithCtx(ctx1, 1)
-		require.Equal(t, 0, cnt)
-		require.Equal(t, context.DeadlineExceeded, err)
+		equal(t, 0, cnt)
+		equal(t, context.DeadlineExceeded, err)
 		s.Close()
 
 		// Sometimes SignalWithCtx is so fast that it bypasses IsClosed and returns ctx.Err() if deadline is Nanosecond
 		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Hour))
 		defer cancel2()
 		cnt, err = s.SignalWithCtx(ctx2, 1)
-		require.Equal(t, 0, cnt)
-		require.Equal(t, nil, err)
+		equal(t, 0, cnt)
+		isNilError(t, err)
 	})
 
 	t.Run("Cancel", func(t *testing.T) {
@@ -251,8 +261,8 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 
 		go func() {
 			cnt, err := s.SignalWithCtx(ctx1, 1)
-			require.Equal(t, context.Canceled, err)
-			require.Equal(t, 0, cnt)
+			equal(t, context.Canceled, err)
+			equal(t, 0, cnt)
 			done <- struct{}{}
 		}()
 		select {
@@ -269,8 +279,8 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 
 		go func() {
 			cnt, err := s.SignalWithCtx(ctx2, 1)
-			require.Equal(t, nil, err)
-			require.Equal(t, 1, cnt)
+			isNilError(t, err)
+			equal(t, 1, cnt)
 			done <- struct{}{}
 		}()
 
@@ -283,8 +293,8 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		go func() {
 			done <- struct{}{}
 			cnt, err := s.SignalWithCtx(ctx3, 1)
-			require.Equal(t, nil, err)
-			require.Equal(t, 0, cnt)
+			isNilError(t, err)
+			equal(t, 0, cnt)
 			done <- struct{}{}
 		}()
 		<-done
@@ -292,8 +302,8 @@ func TestSignallerSignalWithCtx(t *testing.T) {
 		<-done
 
 		cnt, err := s.SignalWithCtx(ctx2, 1)
-		require.Equal(t, 0, cnt)
-		require.Equal(t, nil, err)
+		equal(t, 0, cnt)
+		isNilError(t, err)
 	})
 }
 
@@ -303,20 +313,20 @@ func TestSignallerClose(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
 		s, r := New()
 
-		require.True(t, s.Close())
-		require.False(t, s.Close())
-		require.True(t, s.IsClosed())
-		require.True(t, r.IsClosed())
-		require.Equal(t, 0, s.WaitCount())
-		require.Equal(t, 0, s.Signal(0))
-		require.Equal(t, 0, s.Signal(1))
+		equal(t, true, s.Close())
+		equal(t, false, s.Close())
+		equal(t, true, s.IsClosed())
+		equal(t, true, r.IsClosed())
+		equal(t, 0, s.WaitCount())
+		equal(t, 0, s.Signal(0))
+		equal(t, 0, s.Signal(1))
 		cnt, err := s.SignalWithCtx(context.Background(), N)
-		require.Equal(t, 0, cnt)
-		require.Nil(t, err)
+		equal(t, 0, cnt)
+		isNilError(t, err)
 
 		cnt, err = s.SignalWithCtx(context.Background(), 0)
-		require.Equal(t, 0, cnt)
-		require.Nil(t, err)
+		equal(t, 0, cnt)
+		isNilError(t, err)
 	})
 
 	t.Run("WakesOthers", func(t *testing.T) {
@@ -328,11 +338,11 @@ func TestSignallerClose(t *testing.T) {
 				running <- struct{}{}
 				if i < 5 {
 					ok := r.Wait()
-					require.False(t, ok)
+					equal(t, false, ok)
 				} else {
 					ok, err := r.WaitWithCtx(context.Background())
-					require.False(t, ok)
-					require.Nil(t, err)
+					equal(t, false, ok)
+					isNilError(t, err)
 				}
 				awake <- struct{}{}
 			}()
@@ -355,7 +365,7 @@ func TestSignallerClose(t *testing.T) {
 			<-awake
 		}
 
-		require.Equal(t, 0, s.WaitCount())
+		equal(t, 0, s.WaitCount())
 	})
 
 	t.Run("UnblocksSignalWithCtx", func(t *testing.T) {
@@ -363,8 +373,8 @@ func TestSignallerClose(t *testing.T) {
 		done := make(chan bool)
 		go func() {
 			cnt, err := s.SignalWithCtx(context.Background(), N)
-			require.Equal(t, 0, cnt)
-			require.Nil(t, err)
+			equal(t, 0, cnt)
+			isNilError(t, err)
 			done <- false
 		}()
 
@@ -384,10 +394,10 @@ func TestSignallerClose(t *testing.T) {
 		for s.WaitCount() != N {
 		}
 
-		require.Equal(t, N/2, s.Signal(N/2))
+		equal(t, N/2, s.Signal(N/2))
 
 		for i := 0; i < N/2; i++ {
-			require.True(t, <-done)
+			equal(t, true, <-done)
 		}
 		select {
 		case <-done:
@@ -397,7 +407,7 @@ func TestSignallerClose(t *testing.T) {
 
 		s.Close()
 		for i := 0; i < N-N/2; i++ {
-			require.False(t, <-done)
+			equal(t, false, <-done)
 		}
 	})
 }
@@ -417,10 +427,10 @@ func TestReceiverWait(t *testing.T) {
 	}
 	// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
 	s.SignalWithCtx(context.Background(), 1)
-	require.True(t, <-awake)
+	equal(t, true, <-awake)
 
 	s.Close()
-	require.False(t, r.Wait())
+	equal(t, false, r.Wait())
 }
 
 // Must be a copy of TestReceiverWait
@@ -451,14 +461,14 @@ func TestUnsafeWait(t *testing.T) {
 
 	}
 	s.SignalWithCtx(context.Background(), 1)
-	require.True(t, <-awake)
+	equal(t, true, <-awake)
 
 	s.Broadcast()
-	require.True(t, <-awake)
+	equal(t, true, <-awake)
 
 	s.Close()
 	locker.Lock()
-	require.False(t, UnsafeWait(r, &locker))
+	equal(t, false, UnsafeWait(r, &locker))
 	locker.Unlock()
 }
 
@@ -469,7 +479,7 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 
 		go func() {
 			ok, err := r.WaitWithCtx(context.Background())
-			require.Nil(t, err)
+			isNilError(t, err)
 			awake <- ok
 		}()
 
@@ -480,12 +490,12 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		}
 		// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
 		s.SignalWithCtx(context.Background(), 1)
-		require.True(t, <-awake)
+		equal(t, true, <-awake)
 
 		s.Close()
 		ok, err := r.WaitWithCtx(context.Background())
-		require.False(t, ok)
-		require.Nil(t, err)
+		equal(t, false, ok)
+		isNilError(t, err)
 	})
 	t.Run("BackgroundBroadcast", func(t *testing.T) {
 		s, r := New()
@@ -493,7 +503,7 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 
 		go func() {
 			ok, err := r.WaitWithCtx(context.Background())
-			require.Nil(t, err)
+			isNilError(t, err)
 			awake <- ok
 			s.Close()
 		}()
@@ -514,16 +524,16 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 		ctx1, cancel1 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel1()
 		ok, err := r.WaitWithCtx(ctx1)
-		require.True(t, ok)
-		require.Equal(t, context.DeadlineExceeded, err)
+		equal(t, true, ok)
+		equal(t, context.DeadlineExceeded, err)
 
 		s.Close()
 		ctx2, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(time.Nanosecond))
 		defer cancel2()
 
 		ok, err = r.WaitWithCtx(ctx2)
-		require.False(t, ok)
-		require.Nil(t, err)
+		equal(t, false, ok)
+		isNilError(t, err)
 	})
 
 	t.Run("Cancel", func(t *testing.T) {
@@ -533,8 +543,8 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 
 		go func() {
 			ok, err := r.WaitWithCtx(ctx1)
-			require.True(t, ok)
-			require.Equal(t, context.Canceled, err)
+			equal(t, true, ok)
+			equal(t, context.Canceled, err)
 			done <- struct{}{}
 		}()
 		select {
@@ -553,8 +563,8 @@ func TestReceiverWaitWithCtx(t *testing.T) {
 
 		go func() {
 			ok, err := r.WaitWithCtx(ctx2)
-			require.False(t, ok)
-			require.Nil(t, err)
+			equal(t, false, ok)
+			isNilError(t, err)
 			done <- struct{}{}
 		}()
 
@@ -573,7 +583,7 @@ func TestUnsafeWaitCtx(t *testing.T) {
 			locker.Lock()
 			ok, err := UnsafeWaitCtx(r, &locker, context.Background())
 			locker.Unlock()
-			require.Nil(t, err)
+			isNilError(t, err)
 			awake <- ok
 		}()
 
@@ -584,14 +594,14 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		}
 		// Using with context, because sometimes it is too fast and signals before goroutine starts waiting
 		s.SignalWithCtx(context.Background(), 1)
-		require.True(t, <-awake)
+		equal(t, true, <-awake)
 
 		s.Close()
 		locker.Lock()
 		ok, err := UnsafeWaitCtx(r, &locker, context.Background())
 		locker.Unlock()
-		require.False(t, ok)
-		require.Nil(t, err)
+		equal(t, false, ok)
+		isNilError(t, err)
 	})
 	t.Run("BackgroundBroadcast", func(t *testing.T) {
 		s, r := New()
@@ -602,7 +612,7 @@ func TestUnsafeWaitCtx(t *testing.T) {
 			locker.Lock()
 			ok, err := UnsafeWaitCtx(r, &locker, context.Background())
 			locker.Unlock()
-			require.Nil(t, err)
+			isNilError(t, err)
 			awake <- ok
 			s.Close()
 		}()
@@ -627,8 +637,8 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		locker.Lock()
 		ok, err := UnsafeWaitCtx(r, &locker, ctx1)
 		locker.Unlock()
-		require.True(t, ok)
-		require.Equal(t, context.DeadlineExceeded, err)
+		equal(t, true, ok)
+		equal(t, context.DeadlineExceeded, err)
 
 		s.Close()
 
@@ -638,8 +648,8 @@ func TestUnsafeWaitCtx(t *testing.T) {
 		locker.Lock()
 		ok, err = UnsafeWaitCtx(r, &locker, ctx2)
 		locker.Unlock()
-		require.False(t, ok)
-		require.Nil(t, err)
+		equal(t, false, ok)
+		isNilError(t, err)
 	})
 
 	t.Run("Cancel", func(t *testing.T) {
@@ -653,8 +663,8 @@ func TestUnsafeWaitCtx(t *testing.T) {
 			locker.Lock()
 			ok, err := UnsafeWaitCtx(r, &locker, ctx1)
 			locker.Unlock()
-			require.True(t, ok)
-			require.Equal(t, context.Canceled, err)
+			equal(t, true, ok)
+			equal(t, context.Canceled, err)
 			done <- struct{}{}
 		}()
 		select {
@@ -674,8 +684,8 @@ func TestUnsafeWaitCtx(t *testing.T) {
 			locker.Lock()
 			ok, err := UnsafeWaitCtx(r, &locker, ctx2)
 			locker.Unlock()
-			require.False(t, ok)
-			require.Nil(t, err)
+			equal(t, false, ok)
+			isNilError(t, err)
 			done <- struct{}{}
 		}()
 
@@ -720,7 +730,7 @@ func TestSignallerSignalConcurrent(t *testing.T) {
 	for i := 0; i < S+R; i++ {
 		total += <-done
 	}
-	require.Equal(t, 0, total)
+	equal(t, 0, total)
 }
 
 func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
@@ -763,7 +773,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 		for i := 0; i < S+R; i++ {
 			total += <-done
 		}
-		require.Equal(t, 0, total)
+		equal(t, 0, total)
 	})
 
 	t.Run("Cancel", func(t *testing.T) {
@@ -808,7 +818,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 		for i := 0; i < R; i++ {
 			total += <-done
 		}
-		require.Equal(t, 0, total)
+		equal(t, 0, total)
 	})
 
 	t.Run("Deadline", func(t *testing.T) {
@@ -851,7 +861,7 @@ func TestSignallerSignalWithCtxConcurrent(t *testing.T) {
 		for i := 0; i < R; i++ {
 			total += <-done
 		}
-		require.Equal(t, 0, total)
+		equal(t, 0, total)
 	})
 }
 
@@ -869,8 +879,8 @@ func TestSignallerBroadcastAndSignalWithCtx(t *testing.T) {
 	for i := 0; i < N; i++ {
 		go func() {
 			n, err := s.SignalWithCtx(ctx, 1)
-			require.Equal(t, 0, n)
-			require.Equal(t, context.Canceled, err)
+			equal(t, 0, n)
+			equal(t, context.Canceled, err)
 			done <- true
 		}()
 	}
